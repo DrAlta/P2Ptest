@@ -1,12 +1,12 @@
 # An example P2P chat client (chat.gd)
 extends Node
 
-const BOOTSTRAP_DELAY = 1000
+const BOOTSTRAP_DELAY = 100
 
 signal logy(msg)
-signal incoming_bootstrap_offer(offer)
-signal incoming_bootstrap_answer(answer)
-signal outgoing_bootstrap_answer(answer)
+signal incoming_offer(offer)
+signal incoming_answer(answer)
+signal outgoing_answer(answer)
 
 class Peer:
 	signal emit_ice(id, mid_name, index_name, sdp_name)
@@ -37,16 +37,23 @@ func _ready():
 	create_incoming_bootstrap()
 	create_outgoing_bootstrap()
    # Connect P1 session created to itself to set local description
-	incoming_bootstrap.connection.connect("session_description_created", incoming_bootstrap.connection, "set_local_description")
+	#incoming_bootstrap.connection.connect("session_description_created", incoming_bootstrap.connection, "set_local_description")
 	# Connect P1 session and ICE created to p2 set remote description and candidates
-	incoming_bootstrap.connection.connect("session_description_created", outgoing_bootstrap.connection, "set_remote_description")
+	#incoming_bootstrap.connection.connect("session_description_created", outgoing_bootstrap.connection, "set_remote_description")
 	incoming_bootstrap.connection.connect("ice_candidate_created", outgoing_bootstrap.connection, "add_ice_candidate")
 
 	# Same for P2
-	outgoing_bootstrap.connection.connect("session_description_created", outgoing_bootstrap.connection, "set_local_description")
-	outgoing_bootstrap.connection.connect("session_description_created", incoming_bootstrap.connection, "set_remote_description")
+	#outgoing_bootstrap.connection.connect("session_description_created", outgoing_bootstrap.connection, "set_local_description")
+	#this one outgoing_bootstrap.connection.connect("session_description_created", incoming_bootstrap.connection, "set_remote_description")
+	outgoing_bootstrap.connection.connect("session_description_created", self, "test")
 	outgoing_bootstrap.connection.connect("ice_candidate_created", incoming_bootstrap.connection, "add_ice_candidate")
 
+var test_this
+func test(a,b):
+	test_this=b
+	yield(get_tree().create_timer(1), "timeout")
+	incoming_bootstrap_answer(b)
+	print(a)
 
 func _process(_delta):
 	# bootstrap_clock keeps tracks of how many frames we've provessed. when it 
@@ -54,7 +61,7 @@ func _process(_delta):
 	# peers for their id
 	bootstrap_clock += 1
 	if bootstrap_clock == BOOTSTRAP_DELAY:
-		print("incoming status", incoming_bootstrap.channel.get_ready_state())
+		emit_signal("logy","\nincoming status"+ str(incoming_bootstrap.channel.get_ready_state()))
 		bootstrap_clock = 0
 	
 	if incoming_bootstrap:
@@ -136,17 +143,19 @@ func create_incoming_bootstrap():
 	incoming_bootstrap.channel = incoming_bootstrap.connection.create_data_channel("chat", {"id": 1, "negotiated": true})
 	
 	incoming_bootstrap.connection.connect("ice_candidate_created", incoming_bootstrap, "_new_ice_candidate")
-	incoming_bootstrap.connect("emit_ice", incoming_bootstrap, "send_candidate")
+	incoming_bootstrap.connect("new_ice", incoming_bootstrap, "send_candidate")
 
 func _incoming_session_created(type, data):
 	print(type,":set incom local desc:", incoming_bootstrap.connection.set_local_description(type, data))
 # warning-ignore:return_value_discarded
 	if type == "offer": 
-		emit_signal("incoming_bootstrap_offer", data)
+		emit_signal("incoming_offer", data)
 
 func incoming_bootstrap_answer(answer):
-	print("answer:incoming set Remote desc:", incoming_bootstrap.connection.set_remote_description("answer", answer))
-	emit_signal("incoming_bootstrap_answer", answer)
+	#if answer == test_this:
+	#print("{\n",answer, "\n}")
+	incoming_bootstrap.connection.set_remote_description("answer", test_this)
+	emit_signal("incoming_answer", answer)
 
 func outgoing_bootstrap_offer(offer):
 	print( "offer:set outing remote desc", outgoing_bootstrap.connection.set_remote_description("offer", offer))
@@ -171,16 +180,16 @@ func create_outgoing_bootstrap():
 	outgoing_bootstrap.channel = outgoing_bootstrap.connection.create_data_channel("chat", {"id": 1, "negotiated": true})
 	
 	outgoing_bootstrap.connection.connect("ice_candidate_created", outgoing_bootstrap, "_new_ice_candidate")
-	outgoing_bootstrap.connect("emit_ice", outgoing_bootstrap, "send_candidate")
+	outgoing_bootstrap.connect("new_ice", outgoing_bootstrap, "send_candidate")
 
 
 func _outgoing_session_description(type, data):
-	print(type, "set out local desc:", outgoing_bootstrap.connection.set_local_description(type, data)) 
 	if type == "answer": 
-#		print("emiting out answer")
-		emit_signal("outgoing_bootstrap_answer", data)
+		#print("(\n",data, "\n)")
+		emit_signal("outgoing_answer", data)
 	else:
 		print("oops2")
+	print(type, "set out local desc:", outgoing_bootstrap.connection.set_local_description(type, data)) 
 		
 
 
@@ -197,7 +206,7 @@ func _create_peer():
 	})
 	peer.connection.connect("session_description_created", peer, "_session_description_created")
 	peer.connection.connect("ice_candidate_created", peer, "_new_ice_candidate")
-	peer.connect("emit_ice", peer, "send_candidate")
+	peer.connect("new_ice", peer, "send_candidate")
 
 	# Create negotiated data channel
 	peer.channel = peer.connection.create_data_channel("chat", {"id": 1, "negotiated": true})
@@ -223,16 +232,16 @@ func _session_description_created(type, data, peer_id: int):
 
 func send_offer(peer : Peer, offer) -> int:
 	var msg = JSON.print({"Type": "Offer", "Src": myself_id, "Peer": peer.id, "Offer": offer})
-	emit_signal("logy", "Sent to %s: %s" % [peer.id, msg])
+	emit_signal("logy", "\nSent to %s: %s" % [peer.id, msg])
 	return(send_message_to(msg, peer))
 
 func send_answer(peer : Peer, answer) -> int:
 	var msg = JSON.print({"Type": "Answer", "Src": myself_id, "Peer": peer.id, "Answer": answer})
-	emit_signal("logy", "Sent to %s: %s" % [peer.id, msg])
+	emit_signal("logy", "\nSent to %s: %s" % [peer.id, msg])
 	return(send_message_to(msg, peer))
 
 func offer_received(peer : Peer,offer):
-	emit_signal("logy", "Got offer:" + str(offer))
+	emit_signal("logy", "\nGot offer:" + str(offer))
 
 	print(peer.id, " RD:",peer.connection.set_remote_description("offer", offer))
 
@@ -243,7 +252,7 @@ func offer_received(peer : Peer,offer):
 
 func _send_msg(type, peer, data) -> int:
 	var msg = JSON.print({"Type": type, "Src": myself_id, "Data": data})
-	emit_signal("logy", "Sent to %s: %s" % [peer.id, msg])
+	emit_signal("logy", "\nSent to %s: %s" % [peer.id, msg])
 	return(send_message_to(msg, peer))
 
 
@@ -261,7 +270,7 @@ func _parse_msg(msg: String, src : Peer):
 				emit_signal("offer_received", peer_id, req["Offer"])
 				#Try do connect it it's new peer or forward it along if we requested it for someone else
 			else:
-				emit_signal("logy", "invalid offer from %s" % src.id)
+				emit_signal("logy", "\ninvalid offer from %s" % src.id)
 				
 		elif type == "Answer":
 			# Answer received
