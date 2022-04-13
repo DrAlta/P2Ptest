@@ -1,0 +1,38 @@
+[gd_scene load_steps=2 format=2]
+
+[ext_resource path="res://test.gd" type="Script" id=1]
+
+[node name="Control" type="Control"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource( 1 )
+
+[node name="Button" type="Button" parent="."]
+margin_right = 12.0
+margin_bottom = 20.0
+text = "1"
+
+[node name="out" type="TextEdit" parent="."]
+margin_left = 68.0
+margin_top = 6.0
+margin_right = 462.0
+margin_bottom = 46.0
+
+[node name="Button2" type="Button" parent="."]
+margin_left = 10.0
+margin_top = 140.0
+margin_right = 22.0
+margin_bottom = 167.0
+
+[node name="in" type="TextEdit" parent="."]
+margin_left = 52.0
+margin_top = 149.0
+margin_right = 92.0
+margin_bottom = 189.0
+
+[node name="start" type="Button" parent="."]
+margin_left = 288.0
+margin_top = 154.0
+margin_right = 329.0
+margin_bottom = 174.0
+text = "start"
