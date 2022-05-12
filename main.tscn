@@ -14,5 +14,12 @@ columns = 2
 [node name="Control" parent="GridContainer" instance=ExtResource( 1 )]
 anchor_right = 0.0
 anchor_bottom = 0.0
-margin_right = 512.0
+margin_right = 510.0
+margin_bottom = 600.0
+
+[node name="Control2" parent="GridContainer" instance=ExtResource( 1 )]
+anchor_right = 0.0
+anchor_bottom = 0.0
+margin_left = 514.0
+margin_right = 1024.0
 margin_bottom = 600.0

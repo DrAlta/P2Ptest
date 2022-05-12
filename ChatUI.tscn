@@ -21,6 +21,10 @@ rect_min_size = Vector2( 300, 50 )
 [node name="VBoxContainer" type="VBoxContainer" parent="AnswerPopup"]
 anchor_right = 1.0
 anchor_bottom = 1.0
+margin_left = 4.0
+margin_top = 4.0
+margin_right = -4.0
+margin_bottom = -4.0
 
 [node name="AnswerOut" type="TextEdit" parent="AnswerPopup/VBoxContainer"]
 margin_right = 1010.0
@@ -58,7 +62,7 @@ margin_right = 1010.0
 margin_bottom = 31.0
 size_flags_horizontal = 3
 
-[node name="BootstrapButton" type="Button" parent="VBoxContainer/HBoxContainer"]
+[node name="ConnectButton" type="Button" parent="VBoxContainer/HBoxContainer"]
 margin_right = 64.0
 margin_bottom = 31.0
 text = "Connect"
