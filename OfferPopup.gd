@@ -1,9 +1,7 @@
 extends PanelContainer
 signal got_answer(answer)
 
-# Declare member variables here. Examples:
-# var a: int = 2
-# var b: String = "text"
+var boot
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
@@ -12,8 +10,17 @@ func _ready() -> void:
 	$VBoxContainer/AnswerBox/Cancel.connect("pressed", self, "on_cancel")
 	pass # Replace with function body.
 
+func _process(_delta):
+	boot.peer.connection.poll()
 
-
+func initialize(incoming):
+	boot = incoming
+	connect("got_answer", boot, "on_bootstrap_answered")
+	boot.connect("incoming_bootstrap_offer", self, "display_offer")
+	boot.connect("incoming_bootstrap_answered", self, "on_incoming_bootstrap_answered")
+	boot.connect("incoming_bootstrap_answered", self, "on_cancel")
+	boot.peer.connection.create_offer()
+	
 # Called every frame. 'delta' is the elapsed time since the previous frame.
 #func _process(delta: float) -> void:
 #	pass
@@ -27,7 +34,8 @@ func process_answer():
 	var temp = JSON.parse($VBoxContainer/AnswerBox/Answer.text)
 	if temp.error == OK:
 		if "Answer" in temp.result:
-			emit_signal("got_answered", temp.result)
+			print("36:process_answer:answer found")
+			emit_signal("got_answer", temp.result)
 
 func on_cancel():
 	queue_free()

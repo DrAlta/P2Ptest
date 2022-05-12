@@ -22,7 +22,7 @@ class Boot:
 
 class IncomingBootstrap:
 	signal logy(msg)
-	signal incoming_bootstrap_answered(peer)
+	signal incoming_bootstrap_answered
 	signal incoming_bootstrap_offer(offer)
 
 	var peer : Peer
@@ -40,12 +40,13 @@ class IncomingBootstrap:
 			emit_signal("incoming_bootstrap_offer", {"Offer" : data, "ICE" : incoming_ice})
 
 	func on_bootstrap_answered(answer):
+			print("43:on_bootstrap_answered")
 			if "Answer" in answer: 
 				emit_signal("logy", "answer:incoming set Remote desc:" + str(peer.connection.set_remote_description("answer", answer.Answer)))
 			if "ICE" in answer: 
 				for ice in answer.ICE:
 					peer.connection.add_ice_candidate(ice.Media, ice.Index, ice.Name)
-			emit_signal("incoming_bootstrap_answered", peer)
+			emit_signal("incoming_bootstrap_answered")
  
 func on_incoming_bootstrap_answered(peer):
 	if peer.id in my_connecting:
@@ -66,7 +67,6 @@ var my_connecting : = {}
 var bootstrap_clock :int = 0
 func _ready():
 	myself_id = randi()
-	create_incoming_bootstrap()
 	create_outgoing_bootstrap()
 
 
@@ -175,12 +175,13 @@ func create_incoming_bootstrap():
 	var _discard = boot.peer.connection.initialize({
 		"iceServers": [ { "urls": ["stun:stun.l.google.com:19302"] } ]
 	})
-	_discard = boot.peer.connection.connect("session_description_created", boot, "on_session_created")
+	print("178:", boot.peer.connection.connect("session_description_created", boot, "on_session_created"))
 
 	# Create negotiated data channel
 	boot.peer.channel = boot.peer.connection.create_data_channel("chat", {"id": 1, "negotiated": true})
 	
 	boot.peer.connection.connect("ice_candidate_created", boot, "on_ice_candidate")
+	incoming_bootstraps.append(boot)
 	return(boot)
 #	incoming_bootstraps[boot.peer.id]
 
@@ -208,7 +209,7 @@ func create_outgoing_bootstrap():
 
 func outgoing_ice_candidate(media, index, name):
 	outgoing_ice.append({"Media" : media, "Index" : index, "Name" : name})
-	print("151:outging ice")
+	print("211:outging ice")
 
 ##
 ## Send the anser to the offer given to the outgoing bootstrap
@@ -318,7 +319,7 @@ func _parse_msg(msg: String, src : Peer):
 
 			{"Type" : "Answer", "Peer" : var peer, "Answer" : var answer}:
 				# Answer received
-				var peer_id = src.id + str(Peer)
+				var peer_id = src.id + str(peer)
 				#Try do connect it it's new peer or forward it along if we requested it for someone else
 				if peer_id in my_connecting:
 					pass

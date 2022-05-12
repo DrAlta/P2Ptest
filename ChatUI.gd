@@ -6,13 +6,14 @@ onready var networking : = $Node
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
-	var _discard = networking.connect("logy", self, "logy")
-	_discard = networking.connect("outgoing_bootstrap_answer", self, "display_answer")
+	networking.connect("logy", self, "logy")
+	networking.connect("outgoing_bootstrap_answer", self, "display_answer")
 
-	_discard = $VBoxContainer/HBoxContainer/ConnectButton.connect("pressed", self, "bootstrap")
+	$VBoxContainer/HBoxContainer/ConnectButton.connect("pressed", self, "bootstrap")
+	$VBoxContainer/HBoxContainer/MyOfferButton.connect("pressed", self, "setup_offer")
 	
-	_discard = $AnswerPopup/VBoxContainer/HSplitContainer/Close.connect("pressed", $AnswerPopup, "hide")
-	_discard = $AnswerPopup/VBoxContainer/HSplitContainer/Copy.connect("pressed", self, "copy_answer")
+	$AnswerPopup/VBoxContainer/HSplitContainer/Close.connect("pressed", $AnswerPopup, "hide")
+	$AnswerPopup/VBoxContainer/HSplitContainer/Copy.connect("pressed", self, "copy_answer")
 	pass # Replace with function body.
 
 ################################################################################
@@ -36,19 +37,16 @@ func bootstrap():
 	if adrs.error == OK:
 		if "Offer" in adrs.result:
 			networking.outgoing_bootstrap_offered($VBoxContainer/HBoxContainer/BootstrapOffer.text)
-		elif "Answer" in adrs.result:
-			networking.incoming_bootstrap_answered($VBoxContainer/HBoxContainer/BootstrapOffer.text)
+		else:
+			logy("Invalid offer")
 
 
 func setup_offer():
-	var boot = networking.create_incoming_bootstrap()
-	var mob = offer_scene.instance()
-	add_child(mob)
-	mob.connect("got_answer", boot, "on_bootstrap_answered")
-	boot.connect("incoming_bootstrap_offer", mob, "display_offer")
-	boot.connect("incoming_bootstrap_answered", mob, "on_incoming_bootstrap_answered")
-	boot.connect.create_offer()
-
+	if not($OffersWindow/VBoxContainer.get_child_count() != 0 and $OffersWindow/VBoxContainer.visible == true):  
+		var mob = offer_scene.instance()
+		mob.initialize(networking.create_incoming_bootstrap())
+		$OffersWindow/VBoxContainer.add_child(mob)
+	$OffersWindow.show()
 
 
 ################################################################################
