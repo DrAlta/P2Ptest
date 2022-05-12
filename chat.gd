@@ -3,7 +3,11 @@ extends Node
 
 const BOOTSTRAP_DELAY = 1000
 
-signal logy(msg)
+const ALFNUM = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+
+var _alfnum = ALFNUM.to_ascii()
+
+signal logy(type, msg)
 signal outgoing_bootstrap_answer(answer)
 
 class Peer:
@@ -21,17 +25,21 @@ class Boot:
 	var status : int = 0
 
 class IncomingBootstrap:
-	signal logy(msg)
+	signal logy(type, msg)
 	signal incoming_bootstrap_answered
 	signal incoming_bootstrap_offer(offer)
 
+	var id : String
 	var peer : Peer
 	var incoming_offer
 	var incoming_ice : = []
 
+	func logy(type, msg : String):
+		emit_signal("logy", type, msg)
+
 	func on_ice_candidate(media, index, name):
 		incoming_ice.append({"Media" : media, "Index" : index, "Name" : name})
-		emit_signal("incoming_bootstrap_offer", {"Offer" : incoming_offer, "ICE" : incoming_ice})
+		emit_signal("incoming_bootstrap_offer", {"ID" : id, "Offer" : incoming_offer, "ICE" : incoming_ice})
 
 	func on_session_created(type, data):
 		print(type,":set incom local desc:", peer.connection.set_local_description(type, data))
@@ -42,7 +50,7 @@ class IncomingBootstrap:
 	func on_bootstrap_answered(answer):
 			print("43:on_bootstrap_answered")
 			if "Answer" in answer: 
-				emit_signal("logy", "answer:incoming set Remote desc:" + str(peer.connection.set_remote_description("answer", answer.Answer)))
+				logy("bootstap_incoming", "answer:incoming set Remote desc:" + str(peer.connection.set_remote_description("answer", answer.Answer)))
 			if "ICE" in answer: 
 				for ice in answer.ICE:
 					peer.connection.add_ice_candidate(ice.Media, ice.Index, ice.Name)
@@ -50,17 +58,20 @@ class IncomingBootstrap:
  
 func on_incoming_bootstrap_answered(peer):
 	if peer.id in my_connecting:
-		emit_signal("logy", "Error " + str(peer.id) + "already in use in my_connecting")
+		logy("error", str(peer.id) + "already in use in my_connecting")
 	else:
 		my_connecting[peer.id] = peer
+
+var rand: RandomNumberGenerator = RandomNumberGenerator.new()
 
 var myself_id
 var my_peers : = {}
 
-var incoming_bootstraps : = []
+var incoming_bootstraps : = {}
 var outgoing_bootstrap : Peer
 var outgoing_ice : = []
 var outgoing_answer
+var outgoing_id : int
 var bootstraps_count = 0
 
 var my_connecting : = {}
@@ -90,6 +101,9 @@ func _process(_delta):
 			outgoing_bootstrap.channel.get_ready_state()
 		outgoing_bootstrap.connection.poll()
 
+	for id in incoming_bootstraps.keys():
+		incoming_bootstraps[id].peer.connection.poll()
+
 	for boot_id in my_connecting.keys():
 #		print("68: procing boot ", boot_id)
 		process_bootstrap(my_connecting[boot_id])
@@ -112,23 +126,23 @@ func process_bootstrap(boot):
 				match msg:
 					{"Type" : "Me", "Me" : var who}:
 						if who in my_peers:
-							emit_signal("logy", str(peer.id) + " identified itself as " + str(who) + " again...")
+							logy("network", str(peer.id) + " identified itself as " + str(who) + " again...")
 							send_message_to(JSON.print({"Type":"Not you again!"}), peer)
 							peer.connection.close()
 							my_connecting.erase(peer.id)
 						else:
-							emit_signal("logy", str(peer.id) + " identified itself as " + str(who))
+							logy("network", str(peer.id) + " identified itself as " + str(who))
 							my_connecting.erase(peer.id)
 							peer.id = who
 							my_peers[peer.id] = peer
 					{"Type" : "Who"}:
 						send_message_to(JSON.print({"Type":"Me", "Me": myself_id}), peer)
 					_ :
-						emit_signal("logy", str(peer.id) + " sent unhandleed message:" + packet)
+						logy("network_error", str(peer.id) + " sent unhandleed message:" + packet)
 						peer.connection.close()
 						my_connecting.erase(peer.id)
 			else:
-				emit_signal("logy", str(peer.id) + " sent invalid packet:" + packet)
+				logy("network_error", str(peer.id) + " sent invalid packet:" + packet)
 				peer.connection.close()
 				my_connecting.erase(peer.id)
 		# If it's bootstraping idetify ourselves and set it's ID to sleeping so 
@@ -169,7 +183,8 @@ func send_message(message):
 func create_incoming_bootstrap():
 	var boot = IncomingBootstrap.new()
 	boot.peer = Peer.new()
-	boot.connect("logy", self, "relay_logy")
+	boot.connect("logy", self, "logy")
+	boot.id = rand_id()
 	boot.peer.id = "in" + str(bootstraps_count)
 	boot.peer.connection = WebRTCPeerConnection.new()
 	var _discard = boot.peer.connection.initialize({
@@ -181,11 +196,15 @@ func create_incoming_bootstrap():
 	boot.peer.channel = boot.peer.connection.create_data_channel("chat", {"id": 1, "negotiated": true})
 	
 	boot.peer.connection.connect("ice_candidate_created", boot, "on_ice_candidate")
-	incoming_bootstraps.append(boot)
+	incoming_bootstraps[boot.id] = boot
 	return(boot)
 #	incoming_bootstraps[boot.peer.id]
 
-
+func rand_id():
+	var id : = int(rand.randi())
+	while id in incoming_bootstraps:
+		id = int(rand.randi())
+	return(id)
 
 
 
@@ -219,7 +238,7 @@ func _outgoing_session_description(type, data):
 	if type == "answer": 
 #		print("emiting out answer")
 		yield(get_tree().create_timer(0.5), "timeout")
-		emit_signal("outgoing_bootstrap_answer", ({"Answer" : data, "ICE": outgoing_ice}))
+		emit_signal("outgoing_bootstrap_answer", ({"ID" : outgoing_id, "Answer" : data, "ICE": outgoing_ice}))
 	else:
 		print("oops2")
 		
@@ -227,16 +246,18 @@ func _outgoing_session_description(type, data):
 ## give an offer to the outgoing bootstrap
 ##
 func outgoing_bootstrap_offered(offer):
-	var temp = JSON.parse(offer)
-	if temp.error == OK:
-		if "Offer" in temp.result: 
-			print( "offer:set outing remote desc", outgoing_bootstrap.connection.set_remote_description("offer", temp.result.Offer))
-		if "ICE" in temp.result: 
-			for ice in temp.result.ICE:
-				outgoing_bootstrap.connection.add_ice_candidate(ice.Media, ice.Index, ice.Name)
-		var boot = Boot.new()
-		boot.peer = outgoing_bootstrap
-		my_connecting[outgoing_bootstrap.id] = boot
+	if "Offer" in offer: 
+		if "ID" in offer:
+			outgoing_id = int(offer.ID)
+			logy("bootstraping_outgoing", "offer:set outing remote desc" + str(outgoing_bootstrap.connection.set_remote_description("offer", offer.Offer)))
+		else:
+			logy("error", "offer had no ID")
+	if "ICE" in offer: 
+		for ice in offer.ICE:
+			outgoing_bootstrap.connection.add_ice_candidate(ice.Media, ice.Index, ice.Name)
+	var boot = Boot.new()
+	boot.peer = outgoing_bootstrap
+	my_connecting[outgoing_bootstrap.id] = boot
 #####
 #end bootstrap
 ################################################################################
@@ -279,16 +300,16 @@ func _session_description_created(type, data, peer_id: int):
 
 func send_offer(peer : Peer, offer) -> int:
 	var msg = JSON.print({"Type": "Offer", "Src": myself_id, "Peer": peer.id, "Offer": offer})
-	emit_signal("logy", "Sent to %s: %s" % [peer.id, msg])
+	logy("network", "Sent to %s: %s" % [peer.id, msg])
 	return(send_message_to(msg, peer))
 
 func send_answer(peer : Peer, answer) -> int:
 	var msg = JSON.print({"Type": "Answer", "Src": myself_id, "Peer": peer.id, "Answer": answer})
-	emit_signal("logy", "Sent to %s: %s" % [peer.id, msg])
+	logy("netork", "Sent to %s: %s" % [peer.id, msg])
 	return(send_message_to(msg, peer))
 
 func offer_received(peer : Peer,offer):
-	emit_signal("logy", "Got offer:" + str(offer))
+	logy("network", "Got offer:" + str(offer))
 
 	print(peer.id, " RD:",peer.connection.set_remote_description("offer", offer))
 
@@ -299,12 +320,12 @@ func offer_received(peer : Peer,offer):
 
 func _send_msg(type, peer, data) -> int:
 	var msg = JSON.print({"Type": type, "Src": myself_id, "Data": data})
-	emit_signal("logy", "Sent to %s: %s" % [peer.id, msg])
+	logy("network", "Sent to %s: %s" % [peer.id, msg])
 	return(send_message_to(msg, peer))
 
 
 func _parse_msg(msg: String, src : Peer):
-	emit_signal("logy", src.id + " sent " + msg)
+	logy("network", src.id + " sent " + msg)
 	var temp = JSON.parse(msg)
 	if temp.error == 0:
 		var req = JSON.parse(msg).result
@@ -330,5 +351,5 @@ func _parse_msg(msg: String, src : Peer):
 			_:
 				print("318: oops unhandleed", msg)
 
-func relay_logy(msg):
-	emit_signal("logy", msg)
+func logy(type, msg):
+	emit_signal("logy", type, msg)
