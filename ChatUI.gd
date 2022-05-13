@@ -4,16 +4,27 @@ export (PackedScene) var offer_scene
 onready var log_label : = $VBoxContainer/Log
 onready var networking : = $Node
 
+var outgoing_vacant : = true
+
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
+# warning-ignore:return_value_discarded
 	networking.connect("logy", self, "logy")
+# warning-ignore:return_value_discarded
 	networking.connect("outgoing_bootstrap_answer", self, "display_answer")
+# warning-ignore:return_value_discarded
+	networking.connect("outgoing_connected", $AnswerPopup, "hide")
 
+# warning-ignore:return_value_discarded
 	$VBoxContainer/HBoxContainer/ConnectButton.connect("pressed", self, "main_connect")
+# warning-ignore:return_value_discarded
 	$OffersWindow/VBoxContainer/HBoxContainer/Button.connect("pressed", self, "offers_connect")
+# warning-ignore:return_value_discarded
 	$VBoxContainer/HBoxContainer/MyOfferButton.connect("pressed", self, "setup_offer")
 	
+# warning-ignore:return_value_discarded
 	$AnswerPopup/VBoxContainer/HSplitContainer/Close.connect("pressed", $AnswerPopup, "hide")
+# warning-ignore:return_value_discarded
 	$AnswerPopup/VBoxContainer/HSplitContainer/Copy.connect("pressed", self, "copy_answer")
 	pass # Replace with function body.
 
@@ -47,7 +58,8 @@ func offers_connect():
 
 func process_bootstrap(adrs):
 	print("Bootstraping")
-	if "Offer" in adrs:
+	if "Offer" in adrs and outgoing_vacant:
+		outgoing_vacant = false
 		networking.outgoing_bootstrap_offered(adrs)
 	elif "Answer" in adrs:
 		if str(adrs.ID) in networking.incoming_bootstraps:
@@ -85,3 +97,8 @@ func process_answer(answer):
 	logy("debug", "85:process_answer" + JSON.print(answer))
 	if "ID" in answer and str(answer.ID) in networking.incoming_bootstraps:
 		networking.incoming_bootstraps[str(answer.ID)].on_bootstrap_answered(answer)
+
+func on_outgoing_connected():
+	print("91:debug not going ot see this am I")
+	outgoing_vacant = true
+	$AnswerPopup.hide()

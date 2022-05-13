@@ -9,7 +9,7 @@ func _ready() -> void:
 
 func initialize(boot):
 	boot.connect("incoming_bootstrap_offer", self, "display_offer")
-	boot.connect("incoming_bootstrap_answered", self, "on_cancel")
+	boot.connect("incoming_bootstrap_answered", self, "on_incoming_bootstrap_answered")
 	boot.peer.connection.create_offer()
 	
 # Called every frame. 'delta' is the elapsed time since the previous frame.
@@ -24,3 +24,5 @@ func display_offer(offer):
 func on_cancel():
 	queue_free()
 	
+func on_incoming_bootstrap_answered(_incoming):
+	queue_free()
